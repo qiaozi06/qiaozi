@@ -15,7 +15,8 @@ CXXFLAGS = -std=c++17 -fobjc-arc -O2 -Wall \
   -framework Cocoa -framework CoreGraphics -framework CoreMedia \
   -framework CoreVideo -framework VideoToolbox -framework AVFoundation \
   -framework AudioToolbox -framework Foundation
-LDFLAGS = -L$(OPENSSL_PREFIX)/lib -lcrypto
+LDFLAGS = -L$(OPENSSL_PREFIX)/lib -lcrypto \
+  -Wl,-rpath,@executable_path/../Frameworks -Wl,-rpath,$(WEBRTC_DIR)
 
 all: $(APP)
 
@@ -23,10 +24,15 @@ $(APP): $(SRC) $(HEADERS)
 	$(CXX) $(CXXFLAGS) $(SRC) -o $(APP) $(LDFLAGS)
 
 bundle: $(APP)
-	mkdir -p CrossRemote.app/Contents/MacOS CrossRemote.app/Contents/Resources
+	mkdir -p CrossRemote.app/Contents/MacOS CrossRemote.app/Contents/Resources CrossRemote.app/Contents/Frameworks
 	cp $(APP) CrossRemote.app/Contents/MacOS/
 	cp Info.plist CrossRemote.app/Contents/
+	if [ -d "$(WEBRTC_DIR)/$(WEBRTC_FRAMEWORK).framework" ]; then \
+	  cp -R "$(WEBRTC_DIR)/$(WEBRTC_FRAMEWORK).framework" CrossRemote.app/Contents/Frameworks/; \
+	fi
 	codesign --force --deep --sign - CrossRemote.app || true
+	du -sh CrossRemote.app
+	ls CrossRemote.app/Contents CrossRemote.app/Contents/Frameworks || true
 
 clean:
 	rm -f $(APP)

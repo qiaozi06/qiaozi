@@ -51,6 +51,14 @@ make bundle \
 
 `.github/workflows/build-clients.yml` 包含三个 job：`android`、`windows`、`macos`，手动触发或推送 `main` 分支时执行。
 
+产物（Artifacts）：
+
+| Artifact | 内容 |
+| --- | --- |
+| `android-apk` | `app-debug.apk`（debug 签名） |
+| `windows-agent` | `crossremote-agent.exe`（信令联调版，无媒体流） |
+| `macos-app` | `CrossRemote-macos.zip`（`.app`，内含 `Contents/Frameworks/WebRTC.framework`，ad-hoc 签名） |
+
 macOS job 使用 `webrtc-sdk` 预编译的 `WebRTC.xcframework` 144.7559.15；Windows job 使用 vcpkg 静态依赖构建信令联调版。
 
 ## 已知限制
