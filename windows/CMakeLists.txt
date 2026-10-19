@@ -21,7 +21,7 @@ target_include_directories(crossremote-agent PRIVATE
 )
 
 target_link_libraries(crossremote-agent PRIVATE
-  IXWebSocket::ixwebsocket
+  ixwebsocket::ixwebsocket
   nlohmann_json::nlohmann_json
   OpenSSL::Crypto
   d3d11 dxgi
