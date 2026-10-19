@@ -51,7 +51,7 @@ if(WEBRTC_LIB)
     ${WEBRTC_LIB}
     winmm ws2_32 secur32 crypt32 iphlpapi dbghelp
     dmoguids wmcodecdspuuid msdmo strmiids mfuuid shlwapi
-    ole32 oleaut32 user32 gdi32 advapi32
+    ole32 oleaut32 user32 gdi32 advapi32 normaliz uuid
   )
 endif()
 

@@ -131,7 +131,7 @@ jobs:
           GYP_MSVS_VERSION: '2022'
         run: |
           Set-Location C:\webrtc\src
-          gn gen out/Release --args="is_debug=false is_component_build=false rtc_build_examples=false rtc_build_tools=false rtc_include_tests=false rtc_enable_protobuf=false use_rtti=true symbol_level=0 enable_libaom=false enable_dav1d_decode=false" 2>&1 |
+          gn gen out/Release --args="is_debug=false is_component_build=false rtc_build_examples=false rtc_build_tools=false rtc_include_tests=false rtc_enable_protobuf=false symbol_level=0" 2>&1 |
             Tee-Object -FilePath C:\webrtc\gn.log
           if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\gn.log -Tail 30; exit 1 }
           ninja -C out/Release webrtc 2>&1 | Tee-Object -FilePath C:\webrtc\ninja.log
