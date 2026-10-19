@@ -143,7 +143,8 @@ jobs:
       - name: Report macOS build log
         if: failure()
         run: |
-          tail -n 10 "$RUNNER_TEMP/macos-build.log" 2>/dev/null | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
+          grep -n -E "error:" "$RUNNER_TEMP/macos-build.log" 2>/dev/null | head -n 10 | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
+          tail -n 3 "$RUNNER_TEMP/macos-build.log" 2>/dev/null | sed 's/%/%25/g' | while IFS= read -r l; do echo "::warning::$l"; done || true
 
       - name: Package app
         run: ditto -c -k --sequesterRsrc --keepParent macos/CrossRemote.app CrossRemote-macos.zip

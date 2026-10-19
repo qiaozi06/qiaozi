@@ -1,0 +1,44 @@
+name: Diag macOS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'diag/**'
+
+jobs:
+  diag:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenSSL
+        run: brew install openssl@3
+
+      - name: Fetch WebRTC
+        run: |
+          curl -fL --retry 3 -o "$RUNNER_TEMP/WebRTC.xcframework.zip" \
+            https://github.com/webrtc-sdk/Specs/releases/download/144.7559.15/WebRTC.xcframework.zip
+          unzip -q "$RUNNER_TEMP/WebRTC.xcframework.zip" -d "$RUNNER_TEMP/webrtc"
+          find "$RUNNER_TEMP/webrtc" -maxdepth 3 -name "*.framework" -o -maxdepth 2 -name "*.xcframework"
+
+      - name: Build (capture log)
+        working-directory: macos
+        run: |
+          set -o pipefail
+          FW=$(find "$RUNNER_TEMP/webrtc" -maxdepth 4 -type d -name "WebRTC.framework" | grep -m1 macos || true)
+          echo "FW=$FW"
+          make bundle WEBRTC_DIR="$(dirname "$FW")" OPENSSL_PREFIX="$(brew --prefix openssl@3)" > "$RUNNER_TEMP/b.log" 2>&1 || true
+          echo "--- lines: $(wc -l < "$RUNNER_TEMP/b.log")"
+          grep -n "error" "$RUNNER_TEMP/b.log" | head -n 40
+
+      - name: Annotate errors 1
+        run: |
+          grep -n "error" "$RUNNER_TEMP/b.log" | sed -n '1,10p' | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
+
+      - name: Annotate errors 2
+        run: |
+          grep -n "error" "$RUNNER_TEMP/b.log" | sed -n '11,20p' | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
+
+      - name: Annotate errors 3
+        run: |
+          grep -n "error" "$RUNNER_TEMP/b.log" | sed -n '21,30p' | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
