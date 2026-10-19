@@ -31,10 +31,14 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "SDK=$SDK"
+          ls "$SDK"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" || true
+          ls "$SDK/platforms" "$SDK/build-tools"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -42,9 +46,16 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/android-build.log"
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"
+
+      - name: Report Android build log
+        if: failure()
+        run: |
+          tail -n 10 "$RUNNER_TEMP/android-build.log" 2>/dev/null | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -62,18 +73,36 @@ jobs:
       - name: Install dependencies (vcpkg, static)
         shell: pwsh
         run: |
-          vcpkg install ixwebsocket:x64-windows-static nlohmann-json:x64-windows-static openssl:x64-windows-static
+          vcpkg install ixwebsocket:x64-windows-static nlohmann-json:x64-windows-static openssl:x64-windows-static 2>&1 |
+            Tee-Object -FilePath "$env:TEMP\vcpkg.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Configure
         shell: pwsh
         run: |
           cmake -S windows -B build-win -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static 2>&1 |
+            Tee-Object -FilePath "$env:TEMP\cmake-configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build
         shell: pwsh
-        run: cmake --build build-win --config Release
+        run: |
+          cmake --build build-win --config Release 2>&1 |
+            Tee-Object -FilePath "$env:TEMP\cmake-build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Report Windows build log
+        if: failure()
+        shell: pwsh
+        run: |
+          foreach ($f in @("vcpkg.log","cmake-configure.log","cmake-build.log")) {
+            $p = Join-Path $env:TEMP $f
+            if (Test-Path $p) {
+              Get-Content $p -Tail 6 | ForEach-Object { Write-Host ("::error::[{0}] {1}" -f $f, $_ -replace '%','%25') }
+            }
+          }
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
@@ -96,13 +125,25 @@ jobs:
           curl -fL --retry 3 -o "$RUNNER_TEMP/WebRTC.xcframework.zip" \
             https://github.com/webrtc-sdk/Specs/releases/download/144.7559.15/WebRTC.xcframework.zip
           unzip -q "$RUNNER_TEMP/WebRTC.xcframework.zip" -d "$RUNNER_TEMP/webrtc"
+          find "$RUNNER_TEMP/webrtc" -maxdepth 4 -name "WebRTC.framework" -o -maxdepth 2 -name "*.xcframework"
 
       - name: Build app bundle
         working-directory: macos
         run: |
+          set -o pipefail
+          WEBRTC_FW=$(find "$RUNNER_TEMP/webrtc" -maxdepth 4 -type d -name "WebRTC.framework" | grep -m1 "macos" || true)
+          if [ -z "$WEBRTC_FW" ]; then
+            WEBRTC_FW=$(find "$RUNNER_TEMP/webrtc" -maxdepth 4 -type d -name "WebRTC.framework" | head -n1)
+          fi
+          echo "WEBRTC_FW=$WEBRTC_FW"
           make bundle \
-            WEBRTC_DIR="$RUNNER_TEMP/webrtc/WebRTC.xcframework/macos-arm64_x86_64" \
-            OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+            WEBRTC_DIR="$(dirname "$WEBRTC_FW")" \
+            OPENSSL_PREFIX="$(brew --prefix openssl@3)" 2>&1 | tee "$RUNNER_TEMP/macos-build.log"
+
+      - name: Report macOS build log
+        if: failure()
+        run: |
+          tail -n 10 "$RUNNER_TEMP/macos-build.log" 2>/dev/null | sed 's/%/%25/g' | while IFS= read -r l; do echo "::error::$l"; done || true
 
       - name: Package app
         run: ditto -c -k --sequesterRsrc --keepParent macos/CrossRemote.app CrossRemote-macos.zip
