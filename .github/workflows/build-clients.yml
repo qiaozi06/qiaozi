@@ -67,6 +67,7 @@ jobs:
   windows:
     name: Windows Agent
     runs-on: windows-2022
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -84,12 +85,80 @@ jobs:
             Tee-Object -FilePath build-logs/vcpkg.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Install depot_tools
+        shell: pwsh
+        run: |
+          if (-not (Test-Path C:\depot_tools\gclient.bat)) {
+            git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git C:\depot_tools
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          "C:\depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          git config --global core.longpaths true
+          git config --global core.autocrlf false
+
+      - name: Sync libwebrtc source (M120 / branch-heads/6099)
+        shell: pwsh
+        env:
+          DEPOT_TOOLS_WIN_TOOLCHAIN: '0'
+          GYP_MSVS_VERSION: '2022'
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\webrtc | Out-Null
+          Set-Location C:\webrtc
+          if (-not (Test-Path C:\webrtc\src\.git)) {
+            cmd /c "fetch --nohooks --no-history webrtc 2>&1" | Tee-Object -FilePath C:\webrtc\fetch.log
+            if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\fetch.log -Tail 30; exit 1 }
+          }
+          Set-Location C:\webrtc\src
+          git fetch --depth 1 origin branch-heads/6099 2>&1 | Tee-Object -FilePath C:\webrtc\fetch-branch.log
+          if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\fetch-branch.log -Tail 30; exit 1 }
+          git checkout -f FETCH_HEAD 2>&1 | Tee-Object -FilePath C:\webrtc\checkout.log
+          if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\checkout.log -Tail 30; exit 1 }
+          cmd /c "gclient sync -D --no-history 2>&1" | Tee-Object -FilePath C:\webrtc\sync.log
+          if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\sync.log -Tail 60; exit 1 }
+
+      - name: Restore prebuilt libwebrtc
+        id: webrtc-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\webrtc\src\out\Release\obj\webrtc.lib
+          key: libwebrtc-branch-heads-6099-static-mt-lib-v1
+
+      - name: Build libwebrtc (static, ~2h)
+        if: steps.webrtc-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          DEPOT_TOOLS_WIN_TOOLCHAIN: '0'
+          GYP_MSVS_VERSION: '2022'
+        run: |
+          Set-Location C:\webrtc\src
+          gn gen out/Release --args="is_debug=false is_component_build=false rtc_build_examples=false rtc_build_tools=false rtc_include_tests=false rtc_enable_protobuf=false use_rtti=true symbol_level=0 enable_libaom=false enable_dav1d_decode=false" 2>&1 |
+            Tee-Object -FilePath C:\webrtc\gn.log
+          if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\gn.log -Tail 30; exit 1 }
+          ninja -C out/Release webrtc 2>&1 | Tee-Object -FilePath C:\webrtc\ninja.log
+          if ($LASTEXITCODE -ne 0) { Get-Content C:\webrtc\ninja.log -Tail 60; exit 1 }
+
+      - name: Locate libwebrtc
+        shell: pwsh
+        run: |
+          $lib = "C:\webrtc\src\out\Release\obj\webrtc.lib"
+          if (-not (Test-Path $lib)) {
+            $found = Get-ChildItem C:\webrtc\src\out\Release -Recurse -Filter webrtc.lib -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if (-not $found) { Write-Error "webrtc.lib not found"; exit 1 }
+            New-Item -ItemType Directory -Force -Path (Split-Path $lib) | Out-Null
+            Copy-Item $found.FullName $lib
+          }
+          Get-Item $lib | Select-Object FullName, Length
+
       - name: Configure
         shell: pwsh
         run: |
+          $inc = "C:/webrtc/src;C:/webrtc/src/third_party/abseil-cpp;C:/webrtc/src/third_party/libyuv/include;C:/webrtc/src/third_party/boringssl/src/include"
           cmake -S windows -B build-win -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static 2>&1 |
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DWEBRTC_LIB="C:/webrtc/src/out/Release/obj/webrtc.lib" `
+            "-DWEBRTC_INCLUDE=$inc" 2>&1 |
             Tee-Object -FilePath build-logs/cmake-configure.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

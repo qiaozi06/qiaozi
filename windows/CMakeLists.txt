@@ -35,12 +35,24 @@ target_link_libraries(crossremote-agent PRIVATE
   d3d11 dxgi
 )
 
-# libwebrtc：把官方预编译库的路径传进来即可启用 P2P 媒体。
-# cmake -DWEBRTC_LIB="C:/webrtc/lib/webrtc.lib" -DWEBRTC_INCLUDE="C:/webrtc/include" ..
+# libwebrtc：把官方/自编译产物的路径传进来即可启用 P2P 媒体。
+# -DWEBRTC_INCLUDE="C:/webrtc/src;C:/webrtc/src/third_party/libyuv/include"
+# -DWEBRTC_LIB="C:/webrtc/src/out/Release/obj/webrtc.lib"
 if(WEBRTC_LIB)
-  target_compile_definitions(crossremote-agent PRIVATE CR_WITH_WEBRTC)
+  target_compile_definitions(crossremote-agent PRIVATE
+    CR_WITH_WEBRTC
+    WEBRTC_WIN
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    _CRT_SECURE_NO_WARNINGS
+  )
   target_include_directories(crossremote-agent PRIVATE ${WEBRTC_INCLUDE})
-  target_link_libraries(crossremote-agent PRIVATE ${WEBRTC_LIB} libyuv)
+  target_link_libraries(crossremote-agent PRIVATE
+    ${WEBRTC_LIB}
+    winmm ws2_32 secur32 crypt32 iphlpapi dbghelp
+    dmoguids wmcodecdspuuid msdmo strmiids mfuuid shlwapi
+    ole32 oleaut32 user32 gdi32 advapi32
+  )
 endif()
 
 target_link_options(crossremote-agent PRIVATE /SUBSYSTEM:CONSOLE)

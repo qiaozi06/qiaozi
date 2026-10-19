@@ -150,9 +150,13 @@ class Agent {
       if (peer_) peer_->SetRemoteAnswer(p.value("sdp", ""));
     } else if (type == "ice_candidate") {
       if (peer_ && p.contains("candidate")) {
-        std::string cand = p["candidate"].is_string() ? p["candidate"].get<std::string>()
-                                                      : p["candidate"].dump();
-        peer_->AddRemoteIce(cand, p.value("sdpMid", ""), p.value("sdpMLineIndex", 0));
+        const auto& c = p["candidate"];
+        std::string cand = c.is_string() ? c.get<std::string>() : c.value("candidate", "");
+        std::string mid = c.is_object() ? c.value("sdpMid", p.value("sdpMid", ""))
+                                        : p.value("sdpMid", "");
+        int mline = c.is_object() ? c.value("sdpMLineIndex", p.value("sdpMLineIndex", 0))
+                                  : p.value("sdpMLineIndex", 0);
+        if (!cand.empty()) peer_->AddRemoteIce(cand, mid, mline);
       }
     } else if (type == "session_close") {
       EndSession(p.value("reason", "对端结束会话"));
@@ -171,8 +175,8 @@ class Agent {
     Peer::Callbacks cb;
     cb.on_binary = [this](const std::vector<uint8_t>& d) { OnData(d); };
     cb.on_local_ice = [this](const std::string& cand) {
-      Send("ice_candidate", {{"session_id", session_id_}, {"candidate", json::parse(cand)},
-                             {"sdpMid", "0"}, {"sdpMLineIndex", 0}});
+      // cand 已是 {"candidate","sdpMid","sdpMLineIndex"} 的 JSON，Web 端直接喂给 addIceCandidate。
+      Send("ice_candidate", {{"session_id", session_id_}, {"candidate", json::parse(cand)}});
     };
     cb.on_data_open = [this] { SendScreenInfo(); };
     std::string err;
