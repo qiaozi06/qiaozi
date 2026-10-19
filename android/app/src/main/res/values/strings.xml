@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CrossRemote Agent</string>
+    <string name="accessibility_label">CrossRemote 远程输入</string>
+    <string name="accessibility_desc">允许 CrossRemote 控制端在您授权后注入触摸手势（点击、长按、滑动）。不会读取屏幕文字内容。</string>
+</resources>

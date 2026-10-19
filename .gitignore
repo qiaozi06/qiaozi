@@ -1,0 +1,22 @@
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.jks
+android/*.keystore
+
+# Windows
+windows/build/
+build-win/
+*.exe
+*.pdb
+
+# macOS
+macos/crossremote-agent
+macos/CrossRemote.app
+macos/*.dSYM
+.DS_Store
+
+# 其他
+*.log
