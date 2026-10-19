@@ -7,12 +7,17 @@
 
 #ifdef CR_WITH_WEBRTC
 // libwebrtc m120 头文件与静态库；由 CMake 的 WEBRTC_INCLUDE / WEBRTC_LIB 提供。
+#include "api/audio_codecs/builtin_audio_decoder_factory.h"
+#include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "api/create_peerconnection_factory.h"
 #include "api/data_channel_interface.h"
+#include "api/jsep.h"
 #include "api/make_ref_counted.h"
 #include "api/peer_connection_interface.h"
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
+#include "api/video_codecs/builtin_video_decoder_factory.h"
+#include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "media/base/adapted_video_track_source.h"
 #include "rtc_base/ssl_adapter.h"
 #include "rtc_base/thread.h"
@@ -225,7 +230,14 @@ bool Peer::Init(const std::vector<IceServer>& ice, Callbacks cb, std::string* er
   }
 
   impl->factory = webrtc::CreatePeerConnectionFactory(
-      impl->network.get(), impl->worker.get(), impl->signaling.get());
+      impl->network.get(), impl->worker.get(), impl->signaling.get(),
+      /*default_adm=*/nullptr,
+      webrtc::CreateBuiltinAudioEncoderFactory(),
+      webrtc::CreateBuiltinAudioDecoderFactory(),
+      webrtc::CreateBuiltinVideoEncoderFactory(),
+      webrtc::CreateBuiltinVideoDecoderFactory(),
+      /*audio_mixer=*/nullptr,
+      /*audio_processing=*/nullptr);
   if (!impl->factory) {
     if (err) *err = "CreatePeerConnectionFactory 失败";
     impl->signaling->Stop();
