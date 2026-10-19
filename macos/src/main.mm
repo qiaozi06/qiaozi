@@ -341,7 +341,7 @@ static void InjectInput(const cr::InputEvent &ev) {
 
 - (RTCMediaConstraints *)offerConstraints {
   return [[RTCMediaConstraints alloc]
-      initWithMandatoryConstraints:@[ @"OfferToReceiveAudio=false", @"OfferToReceiveVideo=false" ]
+      initWithMandatoryConstraints:@{ @"OfferToReceiveAudio": @"false", @"OfferToReceiveVideo": @"false" }
                optionalConstraints:nil];
 }
 
