@@ -70,6 +70,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-static-windows-ixws12-openssl36-json312
+
       - name: Install dependencies (vcpkg, static)
         shell: pwsh
         run: |

@@ -4,6 +4,12 @@ project(crossremote_agent_win LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# vcpkg 的 x64-windows-static 依赖用 /MT 编译，本项目也必须用静态运行库，
+# 否则链接 ixwebsocket.lib 时报 LNK2038 RuntimeLibrary 不匹配。
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 find_package(IXWebSocket CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
