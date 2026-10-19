@@ -29,7 +29,7 @@ static NSString *const kDefaultServer = @"wss://desk.qiaozi06.icu/ws?role=agent"
 @end
 
 @implementation CRConfig
-+ (instancetype)load {
++ (instancetype)loadOrCreate {
   CRConfig *c = [CRConfig new];
   c.server = kDefaultServer;
   c.deviceCode = @"";
@@ -115,7 +115,7 @@ static CGKeyCode CGCodeForVK(uint32_t vk) {
 }
 
 - (BOOL)start {
-  __weak typeof(self) weakSelf = self;
+  __weak CRScreenSource *weakSelf = self;
   _stream = CGDisplayStreamCreate(_displayId, _width, _height, 'BGRA', nil,
                                   ^(CGDisplayStreamFrameStatus status, uint64_t time,
                                     IOSurfaceRef frame, CGDisplayStreamUpdateRef update) {
@@ -238,7 +238,7 @@ static void InjectInput(const cr::InputEvent &ev) {
 }
 
 - (void)receiveLoop {
-  __weak typeof(self) weakSelf = self;
+  __weak CRAgent *weakSelf = self;
   [self.ws receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage *msg, NSError *err) {
     if (err) {
       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
@@ -314,7 +314,7 @@ static void InjectInput(const cr::InputEvent &ev) {
   RTCConfiguration *cfg = [[RTCConfiguration alloc] init];
   cfg.iceServers = self.iceServers;
   cfg.sdpSemantics = RTCSdpSemanticsUnifiedPlan;
-  self.pc = [self.factory peerConnectionWithConfiguration:cfg constraints:@[] delegate:self];
+  self.pc = [self.factory peerConnectionWithConfiguration:cfg constraints:[self offerConstraints] delegate:self];
 
   self.videoSource = [self.factory videoSource];
   self.videoTrack = [self.factory videoTrackWithSource:self.videoSource trackId:@"screen"];
@@ -328,7 +328,7 @@ static void InjectInput(const cr::InputEvent &ev) {
   self.screen = [[CRScreenSource alloc] initWithSource:self.videoSource];
   [self.screen start];
 
-  __weak typeof(self) weakSelf = self;
+  __weak CRAgent *weakSelf = self;
   [self.pc offerForConstraints:[self offerConstraints] completionHandler:^(RTCSessionDescription *sdp, NSError *e) {
     if (e || !sdp) { NSLog(@"createOffer 失败: %@", e); return; }
     [weakSelf.pc setLocalDescription:sdp completionHandler:^(NSError *err) {
@@ -341,10 +341,7 @@ static void InjectInput(const cr::InputEvent &ev) {
 
 - (RTCMediaConstraints *)offerConstraints {
   return [[RTCMediaConstraints alloc]
-      initWithMandatoryConstraints:@[
-        [[RTCPair alloc] initWithKey:@"OfferToReceiveAudio" value:@"false"],
-        [[RTCPair alloc] initWithKey:@"OfferToReceiveVideo" value:@"false"]
-      ]
+      initWithMandatoryConstraints:@[ @"OfferToReceiveAudio=false", @"OfferToReceiveVideo=false" ]
                optionalConstraints:nil];
 }
 
@@ -367,7 +364,7 @@ static void InjectInput(const cr::InputEvent &ev) {
 }
 
 - (void)dataChannel:(RTCDataChannel *)dataChannel didReceiveMessageWithBuffer:(RTCDataBuffer *)buffer {
-  const uint8_t *bytes = buffer.data.bytes;
+  const uint8_t *bytes = (const uint8_t *)buffer.data.bytes;
   NSUInteger len = buffer.data.length;
   if (!len) return;
   uint8_t type = bytes[0];
@@ -466,7 +463,7 @@ static void InjectInput(const cr::InputEvent &ev) {
 
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
-    CRConfig *cfg = [CRConfig load];
+    CRConfig *cfg = [CRConfig loadOrCreate];
     CRAgent *agent = [[CRAgent alloc] initWithConfig:cfg];
     [agent start];
     [[NSRunLoop currentRunLoop] run];
