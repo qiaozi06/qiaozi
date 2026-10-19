@@ -30,6 +30,8 @@ target_link_libraries(crossremote-agent PRIVATE
   ixwebsocket::ixwebsocket
   nlohmann_json::nlohmann_json
   OpenSSL::Crypto
+  # vcpkg 的 mbedtls(mbedcrypto) 用 BCryptGenRandom 取随机数
+  bcrypt
   d3d11 dxgi
 )
 
