@@ -73,8 +73,9 @@ jobs:
       - name: Install dependencies (vcpkg, static)
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path build-logs | Out-Null
           vcpkg install ixwebsocket:x64-windows-static nlohmann-json:x64-windows-static openssl:x64-windows-static 2>&1 |
-            Tee-Object -FilePath "$env:TEMP\vcpkg.log"
+            Tee-Object -FilePath build-logs/vcpkg.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Configure
@@ -83,26 +84,39 @@ jobs:
           cmake -S windows -B build-win -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows-static 2>&1 |
-            Tee-Object -FilePath "$env:TEMP\cmake-configure.log"
+            Tee-Object -FilePath build-logs/cmake-configure.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build
         shell: pwsh
         run: |
           cmake --build build-win --config Release 2>&1 |
-            Tee-Object -FilePath "$env:TEMP\cmake-build.log"
+            Tee-Object -FilePath build-logs/cmake-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Report Windows build log
         if: failure()
         shell: pwsh
         run: |
-          foreach ($f in @("vcpkg.log","cmake-configure.log","cmake-build.log")) {
-            $p = Join-Path $env:TEMP $f
-            if (Test-Path $p) {
-              Get-Content $p -Tail 6 | ForEach-Object { Write-Host ("::error::[{0}] {1}" -f $f, $_ -replace '%','%25') }
+          $log = "build-logs/cmake-build.log"
+          if (Test-Path $log) {
+            $hits = Select-String -Path $log -Pattern 'error C\d|error LNK\d|fatal error|CMake Error' -Context 0,2 |
+              Select-Object -First 15
+            foreach ($h in $hits) {
+              Write-Host ("::error::" + ($h.Line -replace '%','%25'))
+              foreach ($c in $h.Context.PostContext) { Write-Host ("::error::  " + ($c -replace '%','%25')) }
             }
+            Write-Host "---- cmake-build.log tail ----"
+            Get-Content $log -Tail 40
           }
+
+      - name: Upload Windows build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-logs
+          path: build-logs/
+          if-no-files-found: warn
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
